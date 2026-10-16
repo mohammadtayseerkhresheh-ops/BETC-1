@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الامتحان الأول - المعلم محمد تيسير الخرشة</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase App & Realtime Database SDKs (Compat Version) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            min-height: 100vh;
+            user-select: none; /* منع تحديد النصوص */
+        }
+        .english-text {
+            direction: ltr;
+            text-align: left;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <!-- Container الرئيسي -->
+    <div class="w-full max-w-3xl bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+
+        <!-- 1. شاشة الغلاف (الترحيب والدخول) -->
+        <div id="welcome-screen" class="p-8 text-center">
+            <div class="mb-6">
+                <span class="inline-block p-3 bg-blue-100 text-blue-600 rounded-full text-3xl mb-3">🎓</span>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">الامتحان الأول</h1>
+                <p class="text-lg text-gray-600">المعلم: <span class="font-semibold text-blue-700">محمد تيسير الخرشة</span></p>
+            </div>
+
+            <div class="max-w-md mx-auto bg-gray-50 p-6 rounded-xl border border-gray-200 mb-6 text-right">
+                <label for="student-name" class="block text-sm font-medium text-gray-700 mb-2">الاسم الكامل للطالب:</label>
+                <input type="text" id="student-name" placeholder="أدخل اسمك الثلاثي هنا..." 
+                    class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none text-right">
+                <p id="name-error" class="text-red-500 text-xs mt-1 hidden">الرجاء إدخال الاسم الكامل للبدء بالامتحان.</p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="startExam()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition duration-200">
+                    ابدأ الامتحان
+                </button>
+                <button onclick="openTeacherModal()" class="bg-gray-700 hover:bg-gray-800 text-white font-medium py-3 px-6 rounded-xl shadow-md transition duration-200">
+                    لوحة المعلم
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. شاشة الامتحان (تظهر أثناء الحل) -->
+        <div id="exam-screen" class="hidden p-6 md:p-8">
+            <!-- شريط المعلومات العلوي -->
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <span id="question-counter" class="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">السؤال 1 من العرض</span>
+                <span id="student-display-name" class="text-sm font-medium text-gray-600"></span>
+            </div>	
+
+            <!-- نص أو قطعة القراءة (إن وجدت) -->
+            <div id="reading-passage-container" class="hidden mb-6 p-4 bg-amber-50 border-r-4 border-amber-400 rounded-lg text-gray-800 leading-relaxed text-sm english-text">
+                <!-- يتم تعبئتها ديناميكياً -->
+            </div>
+
+            <!-- محتوى السؤال -->
+            <div class="mb-6">
+                <h2 id="question-text" class="text-xl font-bold text-gray-800 mb-4 leading-snug english-text"></h2>
+                
+                <!-- خيارات الإجابة -->
+                <div id="options-container" class="space-y-3">
+                    <!-- يتم حقن الخيارات هنا -->
+                </div>
+            </div>
+
+            <!-- أزرار التنقل -->
+            <div class="flex justify-between items-center pt-4 border-t">
+                <button id="prev-btn" onclick="prevQuestion()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-5 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                    السابق
+                </button>
+                <button id="next-btn" onclick="nextQuestion()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">
+                    التالي
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. شاشة النتيجة والتغذية الراجعة -->
+        <div id="result-screen" class="hidden p-8 text-center">
+            <div class="mb-6">
+                <span class="text-5xl mb-2 inline-block">🏆</span>
+                <h2 class="text-2xl font-bold text-gray-800">نتيجة الامتحان</h2>
+                <div class="my-4 text-4xl font-extrabold text-blue-600" id="final-score-display">0 / 100</div>
+                <p id="score-message" class="text-gray-600 text-lg"></p>
+            </div>
+
+            <div class="text-right mb-6">
+                <h3 class="font-bold text-gray-800 mb-3 text-lg border-bottom pb-2">التغذية الراجعة والإجابات الصحيحة:</h3>
+                <div id="review-container" class="space-y-4 max-h-96 overflow-y-auto p-2 bg-gray-50 rounded-xl border">
+                    <!-- تفاصيل المراجعة -->
+                </div>
+            </div>
+
+            <button onclick="location.reload()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-md transition duration-200">
+                إعادة الامتحان
+            </button>
+        </div>
+
+    </div>
+
+    <!-- نافذة دخول لوحة المعلم -->
+    <div id="teacher-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 text-right">تسجيل دخول لوحة المعلم</h3>
+            <p class="text-sm text-gray-600 mb-4 text-right">الرجاء إدخال كلمة المرور المشفرة للوصول لنتائج الطلاب:</p>
+            <input type="password" id="teacher-pass" placeholder="كلمة المرور..." class="w-full px-4 py-3 rounded-lg border border-gray-300 mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none text-right">
+            <div class="flex justify-end gap-2">
+                <button onclick="closeTeacherModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium">إلغاء</button>
+                <button onclick="verifyTeacher()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-medium">دخول</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة نتائج الطلاب (لوحة المعلم) -->
+    <div id="teacher-dashboard" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h3 class="text-xl font-bold text-gray-800">لوحة نتائج الطلاب</h3>
+                <button onclick="closeDashboard()" class="text-gray-500 hover:text-gray-700 font-bold text-lg">&times;</button>
+            </div>
+            <div class="overflow-y-auto flex-grow">
+                <table class="w-full text-right border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-700 border-b">
+                            <th class="p-3">اسم الطالب</th>
+                            <th class="p-3">الدرجة (من 100)</th>
+                            <th class="p-3">وقت الإرسال</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table-body">
+                        <!-- تُرصد النتائج هنا -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- جافاسكريبت لبرمجة الامتحان والربط الحقيقي مع Firebase Realtime Database -->
+    <script>
+        // إعدادات Firebase الخاصة بمشروعك الحقيقي
+        const firebaseConfig = {
+            apiKey: "AIzaSyDflSLc_zbW3WB3wB3yJ7Bh43VG_zfax6o",
+            authDomain: "uuuuuu-2843d.firebaseapp.com",
+            databaseURL: "https://uuuuuu-2843d-default-rtdb.firebaseio.com/",
+            projectId: "uuuuuu-2843d",
+            storageBucket: "uuuuuu-2843d.firebasestorage.app",
+            messagingSenderId: "675441600761",
+            appId: "1:675441600761:web:d53e31b782b9d5576e5a28",
+            measurementId: "G-R2DYPD4GYL"
+        };
+
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        // بنك الأسئلة الشامل (خالٍ من إظهار الإجابات ومفرغ تماماً للفحص مع خط تحت العبارات المستهدفة)
+        const rawQuestions = [
+            // أسئلة القطعة (Reading Passage)
+            {
+                passage: "As a child, Jane loved reading books about a fictional character called Dr Dolittle, who could talk to animals. Perhaps this is what inspired her to go to Africa when she was in her 20s. <u>Here</u> she came across a scientist who asked Jane if she might want a job observing chimpanzees in the wild. She immediately said yes. She went with her mother to the shores of Lake Tanganyika in Tanzania to start her new job, and it was not long before she made out a group of chimpanzees in the trees around an area now called the Gombe Stream National Park.",
+                question: "What does the underlined pronoun (<u>Here</u>) refer to?",
+                options: [
+                    "Africa / Lake Tanganyika in Tanzania",
+                    "A fictional character's book",
+                    "Gombe Stream National Park directly",
+                    "Her home country"
+                ],
+                correct: 0
+            },
+            {
+                passage: "As a child, Jane loved reading books about a fictional character called Dr Dolittle, who could talk to animals. Perhaps this is what inspired her to go to Africa when she was in her 20s. Here she came across a scientist who asked Jane if she might want a job observing chimpanzees in the wild. She immediately said yes. She went with her mother to the shores of Lake Tanganyika in Tanzania to start her new job, and it was not long before she made out a group of chimpanzees in the trees around an area now called the Gombe Stream National Park.<br><br>How could a young English woman with no scientific training possibly make contact with a group of wild chimpanzees? At first, the animals ran away as soon as they saw her. But maybe because she knew very little about these wild animals, it is highly likely that her calmness gained their trust. It was only later that Jane would learn how dangerous they could be. She saw that different groups of chimpanzees had battles in which they tried to wipe out the rival group. But before this, her studies showed her that the chimpanzees could clearly communicate, allowing them to groom and help each other, share food as well as have arguments. Jane pointed out that the animals couldn't communicate using language like people, but they could communicate by touch and sound. Amazingly, she also realised they could use sign language.",
+                question: "Quote a sentence from the text which shows that Jane faced difficulties at the beginning of her work:",
+                options: [
+                    "At first, the animals ran away as soon as they saw her.",
+                    "She went with her mother to the shores of Lake Tanganyika.",
+                    "Jane pointed out that the animals couldn't communicate.",
+                    "She became a UN Messenger for peace in 2002."
+                ],
+                correct: 0
+            },
+            {
+                passage: "As a child, Jane loved reading books about a fictional character called Dr Dolittle... At first, the animals ran away as soon as they saw her... Jane pointed out that the animals couldn't communicate using language like people, but they could communicate by touch and sound. Amazingly, she also realised they could use sign language.",
+                question: "What did Jane observe about the communication methods of the chimpanzees?",
+                options: [
+                    "They communicated by touch and sound, and could use sign language.",
+                    "They used human spoken languages fluently.",
+                    "They only communicated through written symbols.",
+                    "They were completely unable to communicate with each other."
+                ],
+                correct: 0
+            },
+            {
+                passage: "Jane went on to write a number of books about her work. As well as explaining chimpanzees' highly developed social behaviour, she taught us that they are omnivores (people used to think they were vegetarian). In 2002, she became a UN Messenger for peace.",
+                question: "What did Jane teach people about the diet of chimpanzees?",
+                options: [
+                    "They are omnivores (not strictly vegetarian as people used to think).",
+                    "They are purely vegetarian.",
+                    "They feed exclusively on ants and tree bark.",
+                    "They do not require food in the wild."
+                ],
+                correct: 0
+            },
+            {
+                passage: "At this time, people believed that only humans could use tools, but Jane watched chimpanzees using sticks to take ants from a tree, and then used the sticks to feed the ants to their young. Through her work, Jane spelled out to the scientific community for the first time that animals, too, could use tools.",
+                question: "What job did Jane get when she went to Africa?",
+                options: [
+                    "Observing chimpanzees in the wild",
+                    "Working as a UN Messenger",
+                    "Teaching English literature",
+                    "Writing fictional children books"
+                ],
+                correct: 0
+            },
+            // القواعد والمفردات والعبارات (مع فراغات للاختبار)
+            {
+                question: "I was embarrassed when he ......................... that I had made some basic spelling mistakes.",
+                options: [
+                    "pointed out",
+                    "make out",
+                    "came across",
+                    "brought about"
+                ],
+                correct: 0
+            },
+            {
+                question: "Technology has ......................... many changes in the way we live.",
+                options: [
+                    "brought about",
+                    "pointed out",
+                    "make out",
+                    "came across"
+                ],
+                correct: 0
+            },
+            {
+                question: "You don't understand? Do I have to ......................... what I mean?",
+                options: [
+                    "spell out",
+                    "getting across",
+                    "figure out",
+                    "pick up"
+                ],
+                correct: 0
+            },
+            {
+                question: "Abeer commented on how nice her shoes were. The sentence that has a similar meaning is:",
+                options: [
+                    "Abeer paid her a compliment about her shoes.",
+                    "Abeer came across as about her shoes.",
+                    "Abeer struck up a conversation about her shoes.",
+                    "Abeer took to as about her shoes."
+                ],
+                correct: 0
+            },
+            {
+                question: "Don't worry too much about making a favourable ......................... .",
+                options: [
+                    "impression",
+                    "laugh",
+                    "a conversation",
+                    "off"
+                ],
+                correct: 0
+            },
+            {
+                question: "The underlined phrase <u>\"jump into somebody's throat\"</u> means:",
+                options: [
+                    "to react angrily to something",
+                    "to have to make the final point",
+                    "to not stop talking about something",
+                    "to ask someone a lot of questions quickly"
+                ],
+                correct: 0
+            },
+            {
+                question: "Randa's mother was absolutely ......................... when she found out that her daughter had cheated in the exam.",
+                options: [
+                    "livid",
+                    "ecstatic",
+                    "bewildered",
+                    "tense"
+                ],
+                correct: 0
+            },
+            {
+                question: "She felt very ......................... as she waited for her job interview.",
+                options: [
+                    "tense",
+                    "ecstatic",
+                    "bewildered",
+                    "livid"
+                ],
+                correct: 0
+            },
+            {
+                question: "He's ......................... that someone will find out his secret.",
+                options: [
+                    "terrified",
+                    "exasperated",
+                    "ecstatic",
+                    "tense"
+                ],
+                correct: 0
+            },
+            {
+                question: "I don't usually like someone immediately but I really ......................... him.",
+                options: [
+                    "took to",
+                    "hit it off",
+                    "real bond",
+                    "laugh"
+                ],
+                correct: 0
+            },
+            {
+                question: "Rana has drawn my attention to a problem. The synonymous sentence is:",
+                options: [
+                    "Rana has pointed out a problem to me.",
+                    "Rana has figured out a problem to me.",
+                    "Rana has spelled out a problem to me.",
+                    "Rana has taken in a problem to me."
+                ],
+                correct: 0
+            },
+            {
+                question: "He just kept asking me one thing after another for what seemed like ages. The best situation that describes this is:",
+                options: [
+                    "He continued to fire questions at someone.",
+                    "I didn't like being put on the spot.",
+                    "You insist on having the last word.",
+                    "He refused to let it drop."
+                ],
+                correct: 0
+            },
+            {
+                question: "That's awful. It's horrible when a relative is sick. - The underlined expression <u>\"It's been keeping me up at night\"</u> means:",
+                options: [
+                    "I'm worried sick",
+                    "I've had it up to here with",
+                    "A weight off your mind",
+                    "What's the worst that could happen?"
+                ],
+                correct: 0
+            },
+            {
+                question: "That must be a relief for you. - The expression with a similar meaning is:",
+                options: [
+                    "a weight off your mind",
+                    "You've got to be kidding me!",
+                    "I'm walking on air!",
+                    "What's the worst that could happen?"
+                ],
+                correct: 0
+            },
+            {
+                question: "He is driving me up the wall! He is always taking my stuff. - The underlined phrase <u>\"driving me up the wall\"</u> expresses:",
+                options: [
+                    "annoyance",
+                    "sadness",
+                    "happiness",
+                    "melting down"
+                ],
+                correct: 0
+            },
+            {
+                question: "I'm feeling a bit <u>down in the dumps</u>. - The underlined phrase expresses:",
+                options: [
+                    "sadness",
+                    "happiness",
+                    "annoyance",
+                    "melting down"
+                ],
+                correct: 0
+            },
+            {
+                question: "This device will receive a signal from someone trapped under the snow. The phrasal verb that means \"receive a signal\" is:",
+                options: [
+                    "pick up",
+                    "bring out",
+                    "point out",
+                    "make out"
+                ],
+                correct: 0
+            },
+            {
+                question: "Kareem was <u>thrilled</u> when he found out he'd got a place at university. - The correct synonym for <u>thrilled</u> is:",
+                options: [
+                    "ecstatic",
+                    "terrified",
+                    "bewildered",
+                    "tense"
+                ],
+                correct: 0
+            },
+            {
+                question: "The sentence that expresses <u>\"annoyance and frustration\"</u> is:",
+                options: [
+                    "That loud music is driving me up the wall!",
+                    "You've got to be kidding me! You got a high grade.",
+                    "I'm worried sick about my father. He is at hospital.",
+                    "That's a weight off my mind."
+                ],
+                correct: 0
+            },
+            {
+                question: "Saeed didn't tell his friend how <u>frightened</u> he was by the final scene. - The correct synonym for <u>frightened</u> is:",
+                options: [
+                    "terrified",
+                    "devastated",
+                    "livid",
+                    "ecstatic"
+                ],
+                correct: 0
+            },
+            {
+                question: "I've called Malek ......................... today and I can't find where I've put my phone.",
+                options: [
+                    "a couple of times",
+                    "all the time",
+                    "all day",
+                    "from time to time"
+                ],
+                correct: 0
+            },
+            {
+                question: "She's writing a text message right now. - What is the function of using present continuous here?",
+                options: [
+                    "things happening now or around now",
+                    "an action in progress or repeated over a period",
+                    "actions that started and finished in the past",
+                    "a long activity interrupted by a shorter one"
+                ],
+                correct: 0
+            },
+            {
+                question: "I usually take a break from my screen ......................... to rest my eyes.",
+                options: [
+                    "from time to time",
+                    "right now",
+                    "since nine o'clock",
+                    "ever since"
+                ],
+                correct: 0
+            },
+            {
+                question: "Once in a while, Zeina ......................... reading adventure books.",
+                options: [
+                    "prefers",
+                    "is preferring",
+                    "prefer",
+                    "has preferred"
+                ],
+                correct: 0
+            },
+            {
+                question: "Can I call you back? I ......................... to someone else at the moment.",
+                options: [
+                    "'m talking",
+                    "talk",
+                    "talked",
+                    "have talked"
+                ],
+                correct: 0
+            },
+            {
+                question: "Hani was riding his bike when he ......................... his phone.",
+                options: [
+                    "dropped",
+                    "drop",
+                    "drops",
+                    "were dropping"
+                ],
+                correct: 0
+            },
+            {
+                question: "He ......................... thank-you letters all morning.",
+                options: [
+                    "has been writing",
+                    "had been writing",
+                    "have been writing",
+                    "writes"
+                ],
+                correct: 0
+            },
+            // أسئلة ذيل الجملة (Question Tags)
+            {
+                question: "Nothing ever changes, ......................... ?",
+                options: [
+                    "does it",
+                    "doesn't it",
+                    "was it",
+                    "do it"
+                ],
+                correct: 0
+            },
+            {
+                question: "Don't be late, ......................... ?",
+                options: [
+                    "will you",
+                    "are you",
+                    "were you",
+                    "does you"
+                ],
+                correct: 0
+            },
+            {
+                question: "Everyone was there at the party, ......................... ?",
+                options: [
+                    "weren't they",
+                    "wasn't they",
+                    "was they",
+                    "were they"
+                ],
+                correct: 0
+            },
+            {
+                question: "Let's get some ice cream, ......................... ?",
+                options: [
+                    "shall we",
+                    "Shall I",
+                    "aren't I",
+                    "did they"
+                ],
+                correct: 0
+            },
+            {
+                question: "I'm having lunch with them, ......................... ?",
+                options: [
+                    "aren't I",
+                    "are you",
+                    "shall we",
+                    "did they"
+                ],
+                correct: 0
+            },
+            {
+                question: "Nobody gave you the message, ......................... ?",
+                options: [
+                    "did they",
+                    "didn't they",
+                    "shall we",
+                    "aren't I"
+                ],
+                correct: 0
+            },
+            {
+                question: "A: He paid me a lot of compliments. <br>B: ......................... ? That's nice!",
+                options: [
+                    "Did he?",
+                    "Do you?",
+                    "Is it?",
+                    "Have you?"
+                ],
+                correct: 0
+            }
+        ];
+
+        let studentName = "";
+        let currentQuestionIndex = 0;
+        let shuffledQuestions = [];
+        let userAnswers = {};
+
+        function shuffleArray(array) {
+            let arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function startExam() {
+            const nameInput = document.getElementById("student-name");
+            studentName = nameInput.value.trim();
+            const errorEl = document.getElementById("name-error");
+
+            if (!studentName) {
+                errorEl.classList.remove("hidden");
+                nameInput.focus();
+                return;
+            }
+            errorEl.classList.add("hidden");
+
+            document.getElementById("student-display-name").innerText = `الطالب: ${studentName}`;
+
+            shuffledQuestions = rawQuestions.map(q => {
+                let optionsWithIndex = q.options.map((opt, idx) => ({ text: opt, originalIndex: idx }));
+                let shuffledOpts = shuffleArray(optionsWithIndex);
+                let newCorrectIndex = shuffledOpts.findIndex(opt => opt.originalIndex === q.correct);
+                return {
+                    passage: q.passage || null,
+                    question: q.question,
+                    options: shuffledOpts.map(o => o.text),
+                    correct: newCorrectIndex
+                };
+            });
+
+            shuffledQuestions = shuffleArray(shuffledQuestions);
+            currentQuestionIndex = 0;
+            userAnswers = {};
+
+            document.getElementById("welcome-screen").classList.add("hidden");
+            document.getElementById("exam-screen").classList.remove("hidden");
+
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            
+            document.getElementById("question-counter").innerText = `السؤال ${currentQuestionIndex + 1} من ${shuffledQuestions.length}`;
+
+            const passageContainer = document.getElementById("reading-passage-container");
+            if (q.passage) {
+                passageContainer.innerHTML = `<strong>النص المرتبط بالسؤال:</strong><br>${q.passage}`;
+                passageContainer.classList.remove("hidden");
+            } else {
+                passageContainer.classList.add("hidden");
+            }
+
+            document.getElementById("question-text").innerHTML = q.question;
+
+            const optionsContainer = document.getElementById("options-container");
+            optionsContainer.innerHTML = "";
+
+            q.options.forEach((optionText, index) => {
+                const isChecked = userAnswers[currentQuestionIndex] === index ? "checked" : "";
+                const borderClass = isChecked ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50";
+                
+                const div = document.createElement("div");
+                div.className = `flex items-center p-3 border rounded-xl cursor-pointer transition duration-150 ${borderClass} english-text`;
+                div.onclick = () => selectOption(index);
+                
+                div.innerHTML = `
+                    <input type="radio" name="question-option" id="opt-${index}" value="${index}" ${isChecked} class="h-4 w-4 text-blue-600 focus:ring-blue-500 mr-3">
+                    <label for="opt-${index}" class="text-gray-700 font-medium cursor-pointer flex-grow">${optionText}</label>
+                `;
+                optionsContainer.appendChild(div);
+            });
+
+            document.getElementById("prev-btn").disabled = currentQuestionIndex === 0;
+            const nextBtn = document.getElementById("next-btn");
+            if (currentQuestionIndex === shuffledQuestions.length - 1) {
+                nextBtn.innerText = "إنهاء الامتحان وإرسال النتيجة";
+                nextBtn.className = "bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200";
+            } else {
+                nextBtn.innerText = "التالي";
+                nextBtn.className = "bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200";
+            }
+        }
+
+        function selectOption(index) {
+            userAnswers[currentQuestionIndex] = index;
+            loadQuestion();
+        }
+
+        function prevQuestion() {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                loadQuestion();
+            }
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < shuffledQuestions.length - 1) {
+                currentQuestionIndex++;
+                loadQuestion();
+            } else {
+                finishExam();
+            }
+        }
+
+        function finishExam() {
+            let score = 0;
+            let totalQuestions = shuffledQuestions.length;
+
+            shuffledQuestions.forEach((q, index) => {
+                if (userAnswers[index] === q.correct) {
+                    score++;
+                }
+            });
+
+            let finalGrade = Math.round((score / totalQuestions) * 100);
+
+            document.getElementById("exam-screen").classList.add("hidden");
+            document.getElementById("result-screen").classList.remove("hidden");
+
+            document.getElementById("final-score-display").innerText = `${finalGrade} / 100`;
+            document.getElementById("score-message").innerText = `أهلاً بك يا ${studentName}، لقد أجبت بشكل صحيح على ${score} من أصل ${totalQuestions} سؤالاً.`;
+
+            const reviewContainer = document.getElementById("review-container");
+            reviewContainer.innerHTML = "";
+
+            shuffledQuestions.forEach((q, index) => {
+                let userAnsIdx = userAnswers[index];
+                let isCorrect = userAnsIdx === q.correct;
+                let userAnsText = userAnsIdx !== undefined ? q.options[userAnsIdx] : "لم تقم بالإجابة";
+                let correctAnsText = q.options[q.correct];
+
+                let itemDiv = document.createElement("div");
+                itemDiv.className = `p-3 rounded-lg border text-right ${isCorrect ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`;
+                itemDiv.innerHTML = `
+                    <p class="font-bold mb-1 english-text">س ${index + 1}: ${q.question}</p>
+                    <p class="text-sm english-text">إجابتك: <span class="font-semibold">${userAnsText}</span></p>
+                    ${!isCorrect ? `<p class="text-sm text-green-700 mt-1 english-text">الإجابة الصحيحة: <span class="font-semibold">${correctAnsText}</span></p>` : ''}
+                `;
+                reviewContainer.appendChild(itemDiv);
+            });
+
+            // حفظ بيانات الطالب والنتيجة تلقائياً في Realtime Database
+            saveResultToFirebase(studentName, finalGrade);
+        }
+
+        function saveResultToFirebase(name, grade) {
+            const timestamp = new Date().toLocaleString('ar-JO');
+            const resultRef = db.ref('exam_results').push();
+            resultRef.set({
+                studentName: name,
+                score: grade,
+                timestamp: timestamp
+            }).catch(error => {
+                console.error("خطأ في حفظ النتائج:", error);
+            });
+        }
+
+        function openTeacherModal() {
+            document.getElementById("teacher-modal").classList.remove("hidden");
+            document.getElementById("teacher-pass").value = "";
+            document.getElementById("teacher-pass").focus();
+        }
+
+        function closeTeacherModal() {
+            document.getElementById("teacher-modal").classList.add("hidden");
+        }
+
+        function verifyTeacher() {
+            const pass = document.getElementById("teacher-pass").value;
+            if (pass === "MK1978mk") {
+                closeTeacherModal();
+                loadTeacherDashboard();
+            } else {
+                alert("كلمة المرور غير صحيحة!");
+            }
+        }
+
+        function loadTeacherDashboard() {
+            document.getElementById("teacher-dashboard").classList.remove("hidden");
+            const tbody = document.getElementById("results-table-body");
+            tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">جاري تحميل النتائج من القاعدة...</td></tr>`;
+
+            db.ref('exam_results').once('value', (snapshot) => {
+                tbody.innerHTML = "";
+                const data = snapshot.val();
+                if (!data) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">لا توجد نتائج مسجلة حتى الآن.</td></tr>`;
+                    return;
+                }
+
+                Object.values(data).forEach(record => {
+                    const tr = document.createElement("tr");
+                    tr.className = "border-b hover:bg-gray-50";
+                    tr.innerHTML = `
+                        <td class="p-3 font-medium text-gray-800">${record.studentName}</td>
+                        <td class="p-3 font-bold text-blue-600">${record.score} / 100</td>
+                        <td class="p-3 text-sm text-gray-500">${record.timestamp}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        function closeDashboard() {
+            document.getElementById("teacher-dashboard").classList.add("hidden");
+        }
+
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.addEventListener('copy', event => event.preventDefault());
+        
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && !document.getElementById("exam-screen").classList.contains("hidden")) {
+                alert("تنبيه أمني: لقد قمت بمغادرة شاشة الامتحان! يرجى البقاء داخل نافذة الامتحان حرصاً على النزاهة الأكاديمية.");
+            }
+        });
+    </script>
+</body>
+</html>
